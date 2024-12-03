@@ -1,20 +1,12 @@
 // ==UserScript==
-// @name         提取选择题并保存为CSV
+// @name         RM_RefereeTest_Killer
 // @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  提取网页中的选择题并将它们保存为CSV格式
-// @author       你的名字
-// @match        https://ks.wjx.top/*
+// @version      1.7.3
+// @description  RM2024 裁判系统/规则测评助手，根据题库自动填充答案。Github: https://github.com/ShiratsuYudachi/RM_RefereeTest_Killer
+// @author       Nico & baoqi
+// @match        https://djistore.wjx.cn/*
 // @grant        none
-// ==/UserScript==
-// ==UserScript==
-// @name         题目提取脚本
-// @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  提取选择题并保存为CSV文件
-// @author       您的名字
-// @match        需要运行脚本的网页URL
-// @grant        none
+// @license MIT
 // ==/UserScript==
 
 
@@ -25,7 +17,7 @@
 
     // 如果localStorage中没有数据，则从URL获取JSON文件
     if (questions.length === 0) {
-        var jsonUrl = "https://raw.githubusercontent.com/ShiratsuYudachi/RM_RefereeTest_Killer/main/answers.json"; // 替换为您的JSON文件URL
+        var jsonUrl = "https://raw.githubusercontent.com/ShiratsuYudachi/RM_RefereeTest_Killer/main/answers2025_2.json"; // 替换为您的JSON文件URL
         fetch(jsonUrl)
             .then(response => response.json())
             .then(data => {
@@ -45,20 +37,20 @@
         // 将字符串分割成单词数组
         const words1 = str1.toLowerCase().split(/\s+/);
         const words2 = str2.toLowerCase().split(/\s+/);
-    
+
         // 创建词频向量
         const vector1 = {};
         const vector2 = {};
-    
+
         // 填充词频向量
         words1.forEach(word => {
             vector1[word] = (vector1[word] || 0) + 1;
         });
-    
+
         words2.forEach(word => {
             vector2[word] = (vector2[word] || 0) + 1;
         });
-    
+
         // 计算点积
         let dotProduct = 0;
         for (const word in vector1) {
@@ -66,21 +58,21 @@
                 dotProduct += vector1[word] * vector2[word];
             }
         }
-    
+
         // 计算模长
         const magnitude1 = Math.sqrt(Object.values(vector1).reduce((acc, val) => acc + val * val, 0));
         const magnitude2 = Math.sqrt(Object.values(vector2).reduce((acc, val) => acc + val * val, 0));
-    
+
         // 计算余弦相似度
         const similarity = dotProduct / (magnitude1 * magnitude2);
-    
+
         // 转换为百分比
         const percentageSimilarity = (similarity * 100).toFixed(2);
-    
+
         return percentageSimilarity;
     }
     */
-    
+
 
     // 添加按钮到页面
     function addButton() {
@@ -95,7 +87,7 @@
         document.body.appendChild(buttonCollect);
 
         var buttonDownload = document.createElement("button");
-        buttonDownload.innerHTML = "下载题目 (" + questions.length + ")";
+        buttonDownload.innerHTML = "下载题目缓存 (题目数=" + questions.length + "，该长度不会自动刷新)";
         buttonDownload.style.position = "absolute";
         buttonDownload.style.top = "80px";
         buttonDownload.style.right = "20px";
@@ -106,7 +98,7 @@
 
 
         var buttonClear = document.createElement("button");
-        buttonClear.innerHTML = "清除数据";
+        buttonClear.innerHTML = "清除数据（清除后刷新以重新下载题库）";
         buttonClear.style.position = "absolute";
         buttonClear.style.top = "140px";
         buttonClear.style.right = "20px";
@@ -117,7 +109,7 @@
 
         // 添加导入按钮
         var buttonImport = document.createElement("button");
-        buttonImport.innerHTML = "导入数据";
+        buttonImport.innerHTML = "导入数据(建议导入后刷新)";
         buttonImport.style.position = "absolute";
         buttonImport.style.top = "200px";
         buttonImport.style.right = "20px";
@@ -133,6 +125,7 @@
     }
 
     function importQuestions() {
+        clearQuestions()
         var fileInput = document.createElement("input");
         fileInput.type = "file";
         fileInput.accept = ".json";
@@ -203,14 +196,42 @@
     addButton();
 
     function chooseAnswer(questionElement, answer) {
-        //alert("Going Return");;
         if (answer === 'U' || answer === 'N') return; // 如果答案为'U'，则不执行任何操作
-    
-        // 获取选项元素列表
-        //alert("Passed Return");
-        var radios = questionElement.querySelectorAll('.ui-radio');
-        var answerIndex = answer.charCodeAt(0) - 'A'.charCodeAt(0); // 将答案字符转换为索引（A -> 0, B -> 1, ...）
-        radios[answerIndex].click()
+
+        // 获取选项文本
+        var optionLabels = Array.from(questionElement.querySelectorAll('.label')).map(el => el.innerText.trim());
+
+        // 获取问题对应的JSON数据
+        var questionParts = Array.from(questionElement.querySelectorAll(".topichtml > div")).map(div => div.innerText.trim());
+        var questionText = questionElement.querySelector(".topichtml").childNodes[0].nodeValue.trim() + questionParts.join("");
+
+        var matchingQuestion = questions.find(q => q.questionText === questionText && q.options.includes(optionLabels[0]));
+
+        if (matchingQuestion) {
+            // 找到对应答案的选项索引
+            var answerIndex = matchingQuestion.options.findIndex(option => option === optionLabels[answer.charCodeAt(0) - 'A'.charCodeAt(0)]);
+
+            // add lines here
+            // 1. 获取正确答案的文本
+            var correctAnswerText = matchingQuestion.options[answer.charCodeAt(0) - 'A'.charCodeAt(0)];
+
+            // 2. 在当前选项中查找与正确答案文本完全匹配的选项索引
+            answerIndex = optionLabels.findIndex(option => option === correctAnswerText);
+
+            // 3. 可选：处理未找到匹配的情况（例如，记录日志或提示）
+            if (answerIndex === -1) {
+                console.warn("未找到匹配的答案选项: " + correctAnswerText+"\n"+"questionText: "+questionText);
+            }
+            // end add lines here
+
+            if (answerIndex !== -1) {
+                // 点击对应的单选按钮
+                var radios = questionElement.querySelectorAll('.ui-radio');
+                radios[answerIndex].click();
+            }
+        }else{
+            console.warn("未找到匹配的答案: " + questionText);
+        }
     }
 
 // 添加选择答案的按钮
@@ -218,32 +239,50 @@ function addAnswerButtons() {
     var questionElements = document.querySelectorAll('.field.ui-field-contain');
 
     questionElements.forEach(function(questionElement) {
-        var button = document.createElement('button');
+        var textDiv = document.createElement('div');
+        textDiv.innerHTML = ''
 
         // 获取问题文本
         var questionParts = Array.from(questionElement.querySelectorAll(".topichtml > div")).map(div => div.innerText.trim());
-        var questionText = questionElement.querySelector(".topichtml").childNodes[0].nodeValue.trim() + questionParts.join(" ");
+        var questionText = questionElement.querySelector(".topichtml").childNodes[0].nodeValue.trim() + questionParts.join("");
         //console.log(questionText);
         // 在questions数组中查找问题
         var matchingQuestion = questions.find(function(q) {
-            // TODO: handle 正确/错误
-            //return cosineSimilarity(q.questionText, questionText) >= 0.8;
             return q.questionText === questionText;
         });
 
-        // 设置按钮文本和答案
+        // 设置提示文本和答案
         if (matchingQuestion) {
-            button.innerHTML = '选择 ' + matchingQuestion.answer;
             chooseAnswer(questionElement, matchingQuestion.answer);
         } else {
-            button.innerHTML = '未匹配到该问题';
+            textDiv.innerHTML = '未匹配到该问题: '+questionText;
         }
 
-        button.style.marginLeft = '10px';
-        questionElement.appendChild(button);
+        textDiv.style.marginLeft = '10px';
+        textDiv.style.color = '#666';
+        textDiv.style.fontSize = '14px';
+        textDiv.style.padding = '5px';
+        questionElement.appendChild(textDiv);
     });
-    
+
+}
+function expandPage() {
+    // 检查是否存在分页并展开
+    $('.fieldset').css('display', 'block');
+    $('#divSubmit').css('display', 'block');
+    $('#divMultiPage').css('display', 'none');
+}
+function checkForPagination() {
+    var hasPagination = $('#divMultiPage').length > 0;
+    if (hasPagination) {
+        expandPage();
+        createNotification(); // 创建提示框
+    }
 }
 
-addAnswerButtons();
+
+window.addEventListener('load', function() {
+    checkForPagination();
+    addAnswerButtons();
+});
 })();
